@@ -1,0 +1,338 @@
+import streamlit as st
+import time
+import os
+import json
+import google.generativeai as genai
+
+# --- Page Configuration ---
+st.set_page_config(
+    page_title="NEON GENESIS // AI Core",
+    page_icon="🧠",
+    layout="wide",
+    initial_sidebar_state="expanded"
+)
+
+# --- Custom CSS for Cyberpunk Aesthetic ---
+st.markdown("""
+<style>
+    /* Google Fonts */
+    @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&family=Rajdhani:wght@300;500;700&display=swap');
+
+    /* General App Styling */
+    .stApp {
+        background-color: #0e1117;
+        color: #e0e0e0;
+        font-family: 'Rajdhani', sans-serif;
+    }
+
+    /* Headings */
+    h1, h2, h3, h4, h5, h6 {
+        font-family: 'Orbitron', sans-serif;
+        color: #00f3ff; /* Cyan Neon */
+        text-shadow: 0 0 10px #00f3ff, 0 0 20px #00f3ff;
+    }
+    
+    /* Inputs */
+    .stTextInput input, .stSelectbox div[data-baseweb="select"] {
+        background-color: #1c1f26;
+        color: #00f3ff;
+        border: 1px solid #333;
+        border-radius: 0px; 
+    }
+    .stTextInput input:focus {
+        border-color: #ff00ff; /* Pink Neon */
+        box-shadow: 0 0 5px #ff00ff;
+    }
+
+    /* Cards / Containers */
+    div[data-testid="stMetricValue"] {
+        font-family: 'Orbitron', sans-serif;
+        color: #ff00ff;
+        text-shadow: 0 0 5px #ff00ff;
+    }
+
+    /* Primary Button */
+    .stButton button {
+        background: linear-gradient(45deg, #ff00ff, #00f3ff);
+        color: #000;
+        font-family: 'Orbitron', sans-serif;
+        font-weight: bold;
+        border: none;
+        border-radius: 0px;
+        padding: 0.5rem 1rem;
+        transition: all 0.3s ease;
+        text-transform: uppercase;
+        width: 100%;
+        margin-top: 5px;
+    }
+    .stButton button:hover {
+        transform: scale(1.02);
+        box-shadow: 0 0 15px #ff00ff, 0 0 15px #00f3ff;
+        color: #fff;
+    }
+
+    /* Radio Selection */
+    .stRadio label {
+        color: #00f3ff !important;
+        font-family: 'Rajdhani', sans-serif;
+        font-size: 1.2rem;
+    }
+
+    /* Text Area */
+    .stTextArea textarea {
+        background-color: #111;
+        color: #00ff9d; /* Matrix Green */
+        font-family: 'Courier New', monospace;
+        border: 1px solid #333;
+    }
+
+    /* Sidebar */
+    section[data-testid="stSidebar"] {
+        background-color: #0b0d10;
+        border-right: 1px solid #333;
+    }
+</style>
+""", unsafe_allow_html=True)
+
+# --- State Management ---
+if 'history' not in st.session_state:
+    st.session_state.history = []
+if 'step' not in st.session_state:
+    st.session_state.step = 1 # 1=Input, 2=Selection, 3=Output
+if 'analysis_results' not in st.session_state:
+    st.session_state.analysis_results = []
+if 'selected_angle_index' not in st.session_state:
+    st.session_state.selected_angle_index = 0
+if 'generated_script' not in st.session_state:
+    st.session_state.generated_script = ""
+if 'current_topic' not in st.session_state:
+    st.session_state.current_topic = ""
+
+# --- Helper Functions (Gemini API) ---
+def get_gemini_response(model_name, prompt):
+    try:
+        model = genai.GenerativeModel(model_name)
+        response = model.generate_content(prompt)
+        return response.text
+    except Exception as e:
+        st.error(f"API Error: {e}")
+        return None
+
+def generate_angles_ai(topic, model_name, api_key):
+    genai.configure(api_key=api_key)
+    
+    prompt = f"""
+    Act as a Viral Content Strategist. I need 6 distinct video concepts for the topic: "{topic}".
+    Return ONLY a raw JSON array. No markdown formatting, no code blocks.
+    The array must contain exactly 6 objects, corresponding to these angles:
+    1. The Contrarian (Flip the idea, go against grain)
+    2. The Dark Psychology (Power, manipulation, hidden truths)
+    3. The Historical (Connect to Spartan, Samurai, Stoics, etc)
+    4. The Scientific (Biology, Dopamine, Evolution)
+    5. The Aggressive (Direct attack on weakness, wake up call)
+    6. The Story (A short parable or metaphor)
+
+    Each object must have these keys:
+    - "name": (String, one of the angle names above)
+    - "icon": (String, a relevant emoji)
+    - "title": (String, a viral clickbait title)
+    - "desc": (String, very brief 1-sentence description of the angle)
+    - "viral_score": (Integer, predictable viral score 0-100 based on current trends)
+    """
+    
+    response_text = get_gemini_response(model_name, prompt)
+    
+    if response_text:
+        # Clean up potential markdown formatting from AI
+        clean_text = response_text.replace("```json", "").replace("```", "").strip()
+        try:
+            return json.loads(clean_text)
+        except json.JSONDecodeError:
+            st.error("Failed to parse AI response. Raw output shown below.")
+            st.text(response_text)
+            return []
+    return []
+
+def generate_script_ai(topic, angle_data, model_name, api_key):
+    genai.configure(api_key=api_key)
+    
+    angle_name = angle_data['name']
+    title = angle_data['title']
+    
+    prompt = f"""
+    Write a viral short-form video script (TikTok/Reels/Shorts).
+    TOPIC: {topic}
+    ANGLE: {angle_name}
+    TITLE: {title}
+    
+    FORMAT GUIDELINES:
+    - Aspect Ratio: 9:16 Portrait
+    - Captions: Yellow/White distinct style
+    - Hooks: Must stop the scroll immediately.
+    - Structure: Hook -> Value/Story -> Call to Action.
+    - Tone: Matches the '{angle_name}' vibe strictly.
+    
+    OUTPUT FORMAT:
+    Produce the script with clear visual cues in brackets, e.g. [Visual: ...].
+    """
+    
+    return get_gemini_response(model_name, prompt) or "Error generating script."
+
+# --- Sidebar: Configuration ---
+st.sidebar.title("⚙️ NEURAL LINK")
+api_key = st.sidebar.text_input("Enter Gemini API Key", type="password", help="Get key from aistudio.google.com")
+
+st.sidebar.markdown("### 🧠 SELECT AI BRAIN")
+model_choice = st.sidebar.selectbox(
+    "Model",
+    [
+        ("Gemini 3 Pro (The Mastermind)", "gemini-3-pro-preview"),
+        ("Gemini 2.5 Pro (The Storyteller)", "gemini-2.5-pro"),
+        ("Gemini 2.5 Flash (The Speedster)", "gemini-2.5-flash"),
+    ],
+    format_func=lambda x: x[0],
+    index=2 # Default to Flash
+)
+selected_model_value = model_choice[1]
+
+st.sidebar.markdown("---")
+st.sidebar.title("💾 MEMORY BANK")
+
+if st.sidebar.button("RESET SYSTEM"):
+    st.session_state.step = 1
+    st.session_state.generated_script = ""
+    st.rerun()
+
+if st.session_state.history:
+    for item in reversed(st.session_state.history):
+        with st.sidebar.expander(f"{item['timestamp']} | {item['angle']}"):
+            st.write(f"**Topic:** {item['topic']}")
+            st.write(f"**Score:** {item['score']}")
+else:
+    st.sidebar.caption("No analysis records found.")
+
+# --- Main Interface ---
+col1, col2 = st.columns([2, 1])
+with col1:
+    st.title("NEON GENESIS // SYSTEM")
+    st.caption(f"CONNECTED TO: {selected_model_value.upper()}")
+with col2:
+    st.markdown("##")
+    st.markdown(f"*Phase: {['INPUT', 'ANALYSIS', 'GENERATION'][st.session_state.step-1]}* 🟢")
+
+st.markdown("---")
+
+if not api_key:
+    st.warning("⚠️ SYSTEM PAUSED: API KEY REQUIRED IN SIDEBAR")
+    st.stop()
+
+# ==========================================
+# PHASE 1: INPUT
+# ==========================================
+if st.session_state.step == 1:
+    st.markdown("### 📡 TARGET ACQUISITION")
+    topic = st.text_input("ENTER CORE TOPIC", placeholder="e.g. Motivation, The Matrix, Focus...")
+    
+    if st.button("INITIATE 6-ANGLE ANALYSIS"):
+        if topic:
+            with st.spinner(f"TRANSMITTING TO {selected_model_value.upper()}..."):
+                results = generate_angles_ai(topic, selected_model_value, api_key)
+                if results and len(results) == 6:
+                    st.session_state.analysis_results = results
+                    st.session_state.current_topic = topic
+                    st.session_state.step = 2
+                    st.rerun()
+                elif results:
+                     st.error("AI returned incomplete data. Try again.")
+        else:
+            st.error("INPUT REQUIRED.")
+
+# ==========================================
+# PHASE 2: SELECTION
+# ==========================================
+elif st.session_state.step == 2:
+    st.markdown(f"### 🧬 ANALYSIS COMPLETE: '{st.session_state.current_topic.upper()}'")
+    st.caption("SELECT THE MOST VIRAL VECTOR TO PROCEED")
+    
+    results = st.session_state.analysis_results
+    
+    # Grid Layout for Cards
+    c1, c2, c3 = st.columns(3)
+    c4, c5, c6 = st.columns(3)
+    columns = [c1, c2, c3, c4, c5, c6]
+    
+    selected_idx = st.radio(
+        "Select Vector:", 
+        options=range(len(results)),
+        format_func=lambda x: f"{results[x]['name']} (Score: {results[x]['viral_score']})",
+        label_visibility="collapsed",
+        key="angle_selection_radio"
+    )
+
+    # Display Cards
+    for i, col in enumerate(columns):
+        angle = results[i]
+        with col:
+            # Highlight selected
+            border_color = "#ff00ff" if i == selected_idx else "#333"
+            
+            st.markdown(f"""
+            <div style="border: 1px solid {border_color}; padding: 15px; background: #151820; margin-bottom: 10px; height: 100%;">
+                <h3 style="margin:0; font-size: 1.2rem;">{angle['icon']} {angle['name']}</h3>
+                <p style="font-size: 0.9rem; color: #aaa; margin-bottom: 5px; min-height: 40px;">{angle['desc']}</p>
+                <div style="font-weight: bold; font-size: 1.1rem; color: #fff; margin-bottom: 10px;">{angle['title']}</div>
+                <hr style="border-color: #333;">
+                <div style="display:flex; justify-content:space-between; align-items:center;">
+                    <span style="color: #00f3ff;">VIRAL SCORE</span>
+                    <span style="font-size: 1.5rem; color: #ff00ff; font-family: 'Orbitron';">{angle['viral_score']}</span>
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
+    
+    st.markdown("---")
+    if st.button("⚡ GENERATE SCRIPT FROM SELECTED VECTOR ⚡"):
+        st.session_state.selected_angle_index = selected_idx
+        st.session_state.step = 3
+        st.rerun()
+        
+    if st.button("BACK TO SEARCH"):
+        st.session_state.step = 1
+        st.rerun()
+
+# ==========================================
+# PHASE 3: OUTPUT
+# ==========================================
+elif st.session_state.step == 3:
+    angle_data = st.session_state.analysis_results[st.session_state.selected_angle_index]
+    
+    # Generate Only If Not Already Generated (or assume re-gen on entry)
+    if not st.session_state.generated_script:
+        with st.spinner("SYNTHESIZING SCRIPT..."):
+            script = generate_script_ai(st.session_state.current_topic, angle_data, selected_model_value, api_key)
+            st.session_state.generated_script = script
+            
+            # Save to History
+            st.session_state.history.append({
+                "topic": st.session_state.current_topic,
+                "angle": angle_data['name'],
+                "score": angle_data['viral_score'],
+                "timestamp": time.strftime("%H:%M")
+            })
+
+    st.markdown(f"### 🎬 OUTPUT: {angle_data['name'].upper()}")
+    
+    col_out1, col_out2 = st.columns([1, 1])
+    
+    with col_out1:
+        st.markdown(f"**Title:** {angle_data['title']}")
+        st.caption("Target Format: 9:16 Portrait | Style: Yellow/White Captions")
+        st.text_area("Script", st.session_state.generated_script, height=500)
+        
+    with col_out2:
+        st.video("https://www.w3schools.com/html/mov_bbb.mp4")
+        st.info(f"Viral Score: {angle_data['viral_score']}/100")
+        
+    if st.button("START NEW ANALYSIS"):
+        st.session_state.step = 1
+        st.session_state.generated_script = ""
+        st.rerun()
