@@ -4,10 +4,10 @@ import os
 import json
 import google.generativeai as genai
 
-# --- Page Configuration ---
+# --- Page Configuration (MUST BE FIRST) ---
 st.set_page_config(
-    page_title="NEON GENESIS // AI Core",
-    page_icon="🧠",
+    page_title="NEON GENESIS // Script Architect",
+    page_icon="📝",
     layout="wide",
     initial_sidebar_state="expanded"
 )
@@ -212,15 +212,10 @@ else:
     st.sidebar.caption("No analysis records found.")
 
 # --- Main Interface ---
-col1, col2 = st.columns([2, 1])
-with col1:
-    st.title("NEON GENESIS // SYSTEM")
-    st.caption(f"CONNECTED TO: {selected_model_value.upper()}")
-with col2:
-    st.markdown("##")
-    st.markdown(f"*Phase: {['INPUT', 'ANALYSIS', 'GENERATION'][st.session_state.step-1]}* 🟢")
-
-st.markdown("---")
+# Full width for writer focus
+st.title("NEON GENESIS // SCRIPT ARCHITECT")
+st.caption(f"CONNECTED TO: {selected_model_value.upper()}")
+st.markdown("##")
 
 if not api_key:
     st.warning("⚠️ SYSTEM PAUSED: API KEY REQUIRED IN SIDEBAR")
@@ -290,7 +285,7 @@ elif st.session_state.step == 2:
             """, unsafe_allow_html=True)
     
     st.markdown("---")
-    if st.button("⚡ GENERATE SCRIPT FROM SELECTED VECTOR ⚡"):
+    if st.button("⚡ GENERATE MASTER DRAFT ⚡"):
         st.session_state.selected_angle_index = selected_idx
         st.session_state.step = 3
         st.rerun()
@@ -300,14 +295,14 @@ elif st.session_state.step == 2:
         st.rerun()
 
 # ==========================================
-# PHASE 3: OUTPUT
+# PHASE 3: OUTPUT (WRITER MODE)
 # ==========================================
 elif st.session_state.step == 3:
     angle_data = st.session_state.analysis_results[st.session_state.selected_angle_index]
     
     # Generate Only If Not Already Generated (or assume re-gen on entry)
     if not st.session_state.generated_script:
-        with st.spinner("SYNTHESIZING SCRIPT..."):
+        with st.spinner("WRITING MASTER DRAFT..."):
             script = generate_script_ai(st.session_state.current_topic, angle_data, selected_model_value, api_key)
             st.session_state.generated_script = script
             
@@ -319,18 +314,19 @@ elif st.session_state.step == 3:
                 "timestamp": time.strftime("%H:%M")
             })
 
-    st.markdown(f"### 🎬 OUTPUT: {angle_data['name'].upper()}")
+    st.markdown(f"### 📝 THE MASTER DRAFT: {angle_data['name'].upper()}")
+    st.caption(f"Topic: {st.session_state.current_topic} | Title: {angle_data['title']}")
     
-    col_out1, col_out2 = st.columns([1, 1])
+    # Editable Text Area
+    edited_script = st.text_area(
+        "The Master Draft (Editable)", 
+        value=st.session_state.generated_script, 
+        height=600,
+        label_visibility="visible" # Explicitly requested
+    )
     
-    with col_out1:
-        st.markdown(f"**Title:** {angle_data['title']}")
-        st.caption("Target Format: 9:16 Portrait | Style: Yellow/White Captions")
-        st.text_area("Script", st.session_state.generated_script, height=500)
-        
-    with col_out2:
-        st.video("https://www.w3schools.com/html/mov_bbb.mp4")
-        st.info(f"Viral Score: {angle_data['viral_score']}/100")
+    st.markdown("### 📋 COPY TO CLIPBOARD")
+    st.code(edited_script, language="text")
         
     if st.button("START NEW ANALYSIS"):
         st.session_state.step = 1
