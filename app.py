@@ -118,11 +118,13 @@ def get_gemini_response(model_name, prompt):
         st.error(f"API Error: {e}")
         return None
 
-def generate_angles_ai(topic, model_name, api_key):
+def generate_angles_ai(topic, model_name, api_key, language):
     genai.configure(api_key=api_key)
     
     prompt = f"""
     Act as a Viral Content Strategist. I need 6 distinct video concepts for the topic: "{topic}".
+    Language Context: {language}
+    
     Return ONLY a raw JSON array. No markdown formatting, no code blocks.
     The array must contain exactly 6 objects, corresponding to these angles:
     1. The Contrarian (Flip the idea, go against grain)
@@ -135,7 +137,7 @@ def generate_angles_ai(topic, model_name, api_key):
     Each object must have these keys:
     - "name": (String, one of the angle names above)
     - "icon": (String, a relevant emoji)
-    - "title": (String, a viral clickbait title)
+    - "title": (String, a viral clickbait title in {language})
     - "desc": (String, very brief 1-sentence description of the angle)
     - "viral_score": (Integer, predictable viral score 0-100 based on current trends)
     """
@@ -153,23 +155,29 @@ def generate_angles_ai(topic, model_name, api_key):
             return []
     return []
 
-def generate_script_ai(topic, angle_data, model_name, api_key):
+def generate_script_ai(topic, angle_data, model_name, api_key, language):
     genai.configure(api_key=api_key)
     
     angle_name = angle_data['name']
     title = angle_data['title']
     
+    # Dynamic System Instruction
+    if language == "Hinglish":
+        system_role = "You are a viral scriptwriter for Indian YouTube Shorts. Write strictly in Hinglish (Hindi + English mix). Use Hindi for emotion and English for technical terms. Example: 'Focus ka matlab sirf kaam karna nahi hai.'"
+    else:
+        system_role = "You are a world-class viral scriptwriter. Write in punchy, high-retention English."
+    
     prompt = f"""
+    {system_role}
+    
     Act as a Ghostwriter. Write a viral short-form video script (TikTok/Reels/Shorts).
     TOPIC: {topic}
     ANGLE: {angle_name}
     TITLE: {title}
     
     STRICT FORMAT GUIDELINES:
+    - CRITICAL GLOBAL RULE: Do NOT include visual cues, camera angles, [brackets], (parentheses), or asterisks. Write ONLY the spoken words to be narrated.
     - Pure Spoken Text Only.
-    - STRICTLY FORBIDDEN: [Visuals], (SFX), Camera angles, Scene descriptions.
-    - Do NOT use brackets [], parentheses (), or asterisks ** for anything other than structure headers.
-    - Write ONLY what the narrator says.
     
     STRUCTURE:
     Use exactly these headers:
@@ -189,7 +197,26 @@ def generate_script_ai(topic, angle_data, model_name, api_key):
 
 # --- Sidebar: Configuration ---
 st.sidebar.title("⚙️ NEURAL LINK")
-api_key = st.sidebar.text_input("Enter Gemini API Key", type="password", help="Get key from aistudio.google.com")
+
+# Auto-Key Logic
+secrets_path = os.path.join(".streamlit", "secrets.toml")
+api_key = None
+
+# Check secrets
+if os.path.exists(secrets_path):
+    try:
+        api_key_from_secrets = st.secrets.get("GOOGLE_API_KEY")
+        if api_key_from_secrets and api_key_from_secrets != "PASTE_YOUR_KEY_HERE":
+            api_key = api_key_from_secrets
+            st.sidebar.success("🔑 API Key Detected from Secrets")
+        elif api_key_from_secrets == "PASTE_YOUR_KEY_HERE":
+             st.sidebar.warning("⚠️ Please configure .streamlit/secrets.toml")
+    except FileNotFoundError:
+        pass
+
+# Fallback to manual input
+if not api_key:
+    api_key = st.sidebar.text_input("Enter Gemini API Key", type="password", help="Get key from aistudio.google.com")
 
 st.sidebar.markdown("### 🧠 SELECT AI BRAIN")
 model_choice = st.sidebar.selectbox(
@@ -203,6 +230,14 @@ model_choice = st.sidebar.selectbox(
     index=2 # Default to Flash
 )
 selected_model_value = model_choice[1]
+
+# Language Selector
+st.sidebar.markdown("### 🗣️ SELECT LANGUAGE")
+language = st.sidebar.selectbox(
+    "Language",
+    ["Hinglish", "English"],
+    index=0
+)
 
 st.sidebar.markdown("---")
 st.sidebar.title("💾 MEMORY BANK")
@@ -223,11 +258,11 @@ else:
 # --- Main Interface ---
 # Full width for writer focus
 st.title("NEON GENESIS // SCRIPT ARCHITECT")
-st.caption(f"CONNECTED TO: {selected_model_value.upper()}")
+st.caption(f"CONNECTED TO: {selected_model_value.upper()} | MODE: {language.upper()}")
 st.markdown("##")
 
 if not api_key:
-    st.warning("⚠️ SYSTEM PAUSED: API KEY REQUIRED IN SIDEBAR")
+    st.warning("⚠️ SYSTEM PAUSED: API KEY REQUIRED IN SIDEBAR OR SECRETS.TOML")
     st.stop()
 
 # ==========================================
@@ -240,7 +275,7 @@ if st.session_state.step == 1:
     if st.button("INITIATE 6-ANGLE ANALYSIS"):
         if topic:
             with st.spinner(f"TRANSMITTING TO {selected_model_value.upper()}..."):
-                results = generate_angles_ai(topic, selected_model_value, api_key)
+                results = generate_angles_ai(topic, selected_model_value, api_key, language)
                 if results and len(results) == 6:
                     st.session_state.analysis_results = results
                     st.session_state.current_topic = topic
@@ -312,7 +347,7 @@ elif st.session_state.step == 3:
     # Generate Only If Not Already Generated (or assume re-gen on entry)
     if not st.session_state.generated_script:
         with st.spinner("WRITING MASTER DRAFT..."):
-            script = generate_script_ai(st.session_state.current_topic, angle_data, selected_model_value, api_key)
+            script = generate_script_ai(st.session_state.current_topic, angle_data, selected_model_value, api_key, language)
             st.session_state.generated_script = script
             
             # Save to History
