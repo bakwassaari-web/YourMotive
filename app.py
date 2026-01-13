@@ -160,20 +160,29 @@ def generate_script_ai(topic, angle_data, model_name, api_key):
     title = angle_data['title']
     
     prompt = f"""
-    Write a viral short-form video script (TikTok/Reels/Shorts).
+    Act as a Ghostwriter. Write a viral short-form video script (TikTok/Reels/Shorts).
     TOPIC: {topic}
     ANGLE: {angle_name}
     TITLE: {title}
     
-    FORMAT GUIDELINES:
-    - Aspect Ratio: 9:16 Portrait
-    - Captions: Yellow/White distinct style
-    - Hooks: Must stop the scroll immediately.
-    - Structure: Hook -> Value/Story -> Call to Action.
-    - Tone: Matches the '{angle_name}' vibe strictly.
+    STRICT FORMAT GUIDELINES:
+    - Pure Spoken Text Only.
+    - STRICTLY FORBIDDEN: [Visuals], (SFX), Camera angles, Scene descriptions.
+    - Do NOT use brackets [], parentheses (), or asterisks ** for anything other than structure headers.
+    - Write ONLY what the narrator says.
     
-    OUTPUT FORMAT:
-    Produce the script with clear visual cues in brackets, e.g. [Visual: ...].
+    STRUCTURE:
+    Use exactly these headers:
+    [HOOK]
+    (The opening line to stop the scroll)
+    
+    [BODY]
+    (The main value, story, or argument)
+    
+    [CTA]
+    (The closing call to action)
+    
+    Tone: Matches the '{angle_name}' vibe strictly.
     """
     
     return get_gemini_response(model_name, prompt) or "Error generating script."
